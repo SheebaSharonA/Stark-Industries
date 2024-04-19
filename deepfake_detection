@@ -1,0 +1,72 @@
+import cv2
+import mediapipe as mp
+import numpy as np
+
+mp_face_mesh = mp.solutions.face_mesh
+
+
+cap = cv2.VideoCapture("ai2.mp4")
+
+
+with mp_face_mesh.FaceMesh(min_detection_confidence=0.5, min_tracking_confidence=0.5) as face_mesh:
+    previous_landmarks = None
+    consecutive_detections = 0
+    deepfake_detected = False
+    
+    while cap.isOpened():
+        ret, frame = cap.read()
+        if not ret:
+            break
+        
+
+        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
+      
+        results = face_mesh.process(rgb_frame)
+
+        
+        if results.multi_face_landmarks:
+
+            for face_landmarks in results.multi_face_landmarks:
+                landmark_points = []
+                for landmark in face_landmarks.landmark:
+                    landmark_x = int(landmark.x * frame.shape[1])
+                    landmark_y = int(landmark.y * frame.shape[0])
+                    landmark_points.append((landmark_x, landmark_y))
+
+                
+                if previous_landmarks is not None:
+
+                    euclidean_dist = np.linalg.norm(np.array(landmark_points) - np.array(previous_landmarks))
+                    
+                    
+                    if euclidean_dist > 80:  # Adjust threshold as needed
+                        consecutive_detections += 1
+                        if consecutive_detections >= 3:  # Adjust number of consecutive detections
+                            deepfake_detected = True
+                            break
+                    else:
+                        consecutive_detections = 0
+                
+                previous_landmarks = landmark_points
+
+      
+        if results.multi_face_landmarks:
+            for face_landmarks in results.multi_face_landmarks:
+                for idx, landmark in enumerate(face_landmarks.landmark):
+                    cx, cy = int(landmark.x * frame.shape[1]), int(landmark.y * frame.shape[0])
+                    cv2.circle(frame, (cx, cy), 2, (0, 255, 0), -1)
+        
+      
+        cv2.imshow("Frame", frame)
+        
+     
+        if deepfake_detected:
+            print("Warning: Deepfake Detected!")
+            break
+
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+
+cap.release()
+cv2.destroyAllWindows()
